@@ -13,13 +13,7 @@ CACHE_DIR=$2
 ENV_DIR=$3
 WORKING_DIR=$(pwd)
 
-# Export user env variable to use in the file
-for KEY in TELEGRAF_CONF; do
-  [ -f $ENV_DIR/$KEY ] && export "$KEY=$(cat $ENV_DIR/$KEY)"
-done
-
-if [ $TELEGRAF_CONF ]; then TELEGRAF_CONF=$HOME/$TELEGRAF_CONF; fi
-TELEGRAF_CONF=${TELEGRAF_CONF-$HOME/telegraf.conf}
+# Telegraf config
 TELEGRAF_VERSION=1.6.2
 TELEGRAF_FILENAME=telegraf-${TELEGRAF_VERSION}_linux_amd64.tar.gz
 TELEGRAF_URL=https://dl.influxdata.com/telegraf/releases/${TELEGRAF_FILENAME}
@@ -42,29 +36,60 @@ tar -C $CACHE_DIR -zxf $CACHE_DIR/$TELEGRAF_FILENAME
 mkdir -p $BUILD_DIR/bin
 cp $CACHE_DIR/telegraf/usr/bin/telegraf $BUILD_DIR/bin/telegraf
 
-influxdb_ssl_ca_cert="INFLUXDB_SSL_CA_CERT"
-if [ -f $ENV_DIR/$influxdb_ssl_ca_cert ]; then
-    echo "Found certificate for InfluxDB SSL CA" | indent
-    mkdir -p $BUILD_DIR/.telegraf/etc
-    cp $ENV_DIR/$influxdb_ssl_ca_cert $BUILD_DIR/.telegraf/etc/influxdb_ssl_ca_cert.pem
-else
-    echo "No certificate found"
-fi
-
 if [ ! -d $BUILD_DIR/.profile.d ]; then
     mkdir -p "$BUILD_DIR/.profile.d"
 fi
 
-cat > $BUILD_DIR/.profile.d/001-heroku-buildpack-telegraf.sh << EOF
+cat > $BUILD_DIR/.profile.d/002-scalingo-buildpack-telegraf.sh << EOF
 #!/bin/sh
 
 pidfile=/tmp/telegraf.pid
 
 # Start Telegraf from the \$HOME/bin directory with the configuration in /app/telegraf.conf (by default), redirect STDIN to /dev/null (but STDERR should still come through the logs)
-/sbin/start-stop-daemon --start --quiet --pidfile \$pidfile --exec $HOME/bin/telegraf -- -pidfile \$pidfile -config $TELEGRAF_CONF -quiet >/dev/null &
+/sbin/start-stop-daemon --start --quiet --pidfile \$pidfile --exec /app/bin/telegraf -- -pidfile \$pidfile -config $TELEGRAF_CONF -quiet >/dev/null &
 
 EOF
 
-chmod +x $BUILD_DIR/.profile.d/001-heroku-buildpack-telegraf.sh
+chmod +x $BUILD_DIR/.profile.d/002-scalingo-buildpack-telegraf.sh
 
+###############
+# Kafka config
+KAFKA_FILENAME=kafka_2.11-1.1.0.tgz
+KAFKA_URL=http://mirrors.up.pt/pub/apache/kafka/1.1.0/kafka_2.11-1.1.0.tgz
+
+echo "Installing Apache Kafka" | arrow
+
+if [ ! -f $CACHE_DIR/$KAFKA_FILENAME ]; then
+    echo "Downloading Kafka from ${KAFKA_URL}" | indent
+    curl -sLf -o $CACHE_DIR/$KAFKA_FILENAME $KAFKA_URL
+fi
+
+echo "Extracting ${KAFKA_FILENAME}" | indent
+tar -C $BUILD_DIR -zxf $CACHE_DIR/$KAFKA_FILENAME
+
+# Copy the kafka binary to the build dir
+if [ -d $BUILD_DIR/kafka ]; then
+    rm -rf $BUILD_DIR/kafka
+fi
+mv $BUILD_DIR/kafka_* $BUILD_DIR/kafka
+
+if [ ! -d $BUILD_DIR/.profile.d ]; then
+    mkdir -p "$BUILD_DIR/.profile.d"
+fi
+
+cat > $BUILD_DIR/.profile.d/001-scalingo-buildpack-kafka.sh << EOF
+#!/bin/sh
+
+zpidfile=/tmp/zookeeper.pid
+kpidfile=/tmp/kafka.pid
+
+cd /app/kafka/
+
+nohup bin/zookeeper-server-start.sh \$ZOOKEEPER_CONF > /dev/null&
+nohup bin/kafka-server-start.sh \$KAFKA_CONF --override listeners="PLAINTEXT://:\$PORT" > /dev/null&
+
+
+EOF
+
+chmod +x $BUILD_DIR/.profile.d/001-scalingo-buildpack-kafka.sh
 
