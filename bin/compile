@@ -36,21 +36,6 @@ tar -C $CACHE_DIR -zxf $CACHE_DIR/$TELEGRAF_FILENAME
 mkdir -p $BUILD_DIR/bin
 cp $CACHE_DIR/telegraf/usr/bin/telegraf $BUILD_DIR/bin/telegraf
 
-if [ ! -d $BUILD_DIR/.profile.d ]; then
-    mkdir -p "$BUILD_DIR/.profile.d"
-fi
-
-cat > $BUILD_DIR/.profile.d/002-scalingo-buildpack-telegraf.sh << EOF
-#!/bin/sh
-
-pidfile=/tmp/telegraf.pid
-
-# Start Telegraf from the \$HOME/bin directory with the configuration in /app/telegraf.conf (by default), redirect STDIN to /dev/null (but STDERR should still come through the logs)
-/sbin/start-stop-daemon --start --quiet --pidfile \$pidfile --exec /app/bin/telegraf -- -pidfile \$pidfile -config $TELEGRAF_CONF -quiet >/dev/null &
-
-EOF
-
-chmod +x $BUILD_DIR/.profile.d/002-scalingo-buildpack-telegraf.sh
 
 ###############
 # Kafka config
@@ -72,24 +57,4 @@ if [ -d $BUILD_DIR/kafka ]; then
     rm -rf $BUILD_DIR/kafka
 fi
 mv $BUILD_DIR/kafka_* $BUILD_DIR/kafka
-
-if [ ! -d $BUILD_DIR/.profile.d ]; then
-    mkdir -p "$BUILD_DIR/.profile.d"
-fi
-
-cat > $BUILD_DIR/.profile.d/001-scalingo-buildpack-kafka.sh << EOF
-#!/bin/sh
-
-zpidfile=/tmp/zookeeper.pid
-kpidfile=/tmp/kafka.pid
-
-cd /app/kafka/
-
-nohup bin/zookeeper-server-start.sh \$ZOOKEEPER_CONF > /dev/null&
-nohup bin/kafka-server-start.sh \$KAFKA_CONF --override listeners="PLAINTEXT://:\$PORT" > /dev/null&
-
-
-EOF
-
-chmod +x $BUILD_DIR/.profile.d/001-scalingo-buildpack-kafka.sh
 
