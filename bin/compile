@@ -60,7 +60,7 @@ tar -C $CACHE_DIR -zxf $CACHE_DIR/$CHRONOGRAF_FILENAME
 
 # Copy the chronograf binary to the build dir
 mkdir -p $BUILD_DIR/bin
-cp $CACHE_DIR/chronograf/usr/bin/chronograf $BUILD_DIR/bin/chronograf
+cp $CACHE_DIR/chronograf-$CHRONOGRAF_VERSIOB-1/usr/bin/chronograf $BUILD_DIR/bin/chronograf
 
 
 ###############
